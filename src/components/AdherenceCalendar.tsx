@@ -7,6 +7,7 @@ const isSameDay = (d1: Date, d2: Date) => {
   );
 };
 
+import { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { IntakeLog, Medication } from '../types';
 
@@ -24,26 +25,84 @@ export function AdherenceCalendar({
   logs,
   medications,
 }: AdherenceCalendarProps) {
-  // Generate 7 days of the relative week to show
-  const getDaysOfWeek = () => {
-    const today = new Date();
-    const days: Date[] = [];
-    
-    // Start of current week (Monday)
-    const current = new Date(today);
+  
+  // Calculate Monday of any given date
+  const getMondayOfDate = (date: Date) => {
+    const current = new Date(date);
     const day = current.getDay();
-    const diff = current.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
     const monday = new Date(current.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  };
 
-    for (let i = 0; i < 7; i++) {
-      const nextDay = new Date(monday);
-      nextDay.setDate(monday.getDate() + i);
-      days.push(nextDay);
+  // State to track starting Monday of the currently displayed week
+  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date>(() => {
+    return getMondayOfDate(selectedDate);
+  });
+
+  // Sync displayed week if selectedDate changes outside the currently browsed week
+  useEffect(() => {
+    const weekStart = getMondayOfDate(selectedDate);
+    const weekEnd = new Date(currentWeekMonday);
+    weekEnd.setDate(currentWeekMonday.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    if (selectedDate < currentWeekMonday || selectedDate > weekEnd) {
+      setCurrentWeekMonday(weekStart);
     }
-    return days;
+  }, [selectedDate, currentWeekMonday]);
+
+  // Generate 7 days of the currently browsed week
+  const getDaysOfWeek = () => {
+    const daysArr: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const nextDay = new Date(currentWeekMonday);
+      nextDay.setDate(currentWeekMonday.getDate() + i);
+      daysArr.push(nextDay);
+    }
+    return daysArr;
   };
 
   const days = getDaysOfWeek();
+
+  // Navigation handlers
+  const handlePrevWeek = () => {
+    const prev = new Date(currentWeekMonday);
+    prev.setDate(currentWeekMonday.getDate() - 7);
+    setCurrentWeekMonday(prev);
+  };
+
+  const handleNextWeek = () => {
+    const next = new Date(currentWeekMonday);
+    next.setDate(currentWeekMonday.getDate() + 7);
+    setCurrentWeekMonday(next);
+  };
+
+  const handleTodayWeek = () => {
+    const today = new Date();
+    const todayMonday = getMondayOfDate(today);
+    setCurrentWeekMonday(todayMonday);
+    setSelectedDate(today);
+  };
+
+  // Create human-friendly week range heading label
+  const getWeekRangeLabel = () => {
+    if (days.length === 0) return '';
+    const start = days[0];
+    const end = days[6];
+    
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const startStr = start.toLocaleDateString('en-US', options);
+    
+    if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+      return `${startStr} – ${end.getDate()}, ${start.getFullYear()}`;
+    } else if (start.getFullYear() === end.getFullYear()) {
+      return `${startStr} – ${end.toLocaleDateString('en-US', options)}, ${start.getFullYear()}`;
+    } else {
+      return `${startStr}, ${start.getFullYear()} – ${end.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
+    }
+  };
 
   // Helper formatting
   const formatDateString = (date: Date) => {
@@ -54,8 +113,8 @@ export function AdherenceCalendar({
   };
 
   const getDayShortName = (date: Date) => {
-    const daysArr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return daysArr[date.getDay()];
+    const daysWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return daysWeek[date.getDay()];
   };
 
   // Compute status metrics for a specific date
@@ -90,16 +149,56 @@ export function AdherenceCalendar({
 
   return (
     <div className="bg-white border-2 border-slate-200 rounded-[2rem] p-6" id="adherence-calendar-container">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      {/* Top section: Title and Arrows block */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-5 border-b border-slate-100">
         <div>
-          <h4 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-indigo-500" />
+          <h4 className="text-base font-extrabold text-slate-900 flex items-center gap-1.5">
+            <Calendar className="w-5 h-5 text-indigo-600" />
             Adherence Journey
           </h4>
-          <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-wider">
+          <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-wider">
             CHOOSE DATE TO VIEW HISTORIC LOGS
           </p>
         </div>
+
+        {/* Dynamic Navigation panel */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePrevWeek}
+            className="p-1 px-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 rounded-xl text-slate-600 text-xs font-bold transition flex items-center gap-1 cursor-pointer hover:bg-slate-50"
+            title="Previous Week"
+            id="btn-calendar-prev-week"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Prev</span>
+          </button>
+          
+          <button
+            onClick={handleTodayWeek}
+            className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black transition cursor-pointer"
+            title="Go to Today"
+            id="btn-calendar-go-today"
+          >
+            Today
+          </button>
+
+          <button
+            onClick={handleNextWeek}
+            className="p-1 px-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 rounded-xl text-slate-600 text-xs font-bold transition flex items-center gap-1 cursor-pointer hover:bg-slate-50"
+            title="Next Week"
+            id="btn-calendar-next-week"
+          >
+            <span>Next</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Week Title Range Label & Legend row */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 bg-slate-50/70 p-4 rounded-2xl border-2 border-slate-100">
+        <span className="text-sm font-black text-slate-800 tracking-tight" id="calendar-week-range-label">
+          {getWeekRangeLabel()}
+        </span>
 
         {/* Calendar legend */}
         <div className="flex items-center gap-2.5 text-[10px] font-bold text-slate-500 flex-wrap">
@@ -143,7 +242,7 @@ export function AdherenceCalendar({
 
           return (
             <button
-               id={`calendar-day-${day.getDate()}`}
+              id={`calendar-day-${day.getDate()}`}
               key={day.toISOString()}
               onClick={() => handleDateClick(day)}
               className={`flex flex-col items-center py-3.5 rounded-2xl transition duration-150 relative cursor-pointer ${statusBg} ${ringColor}`}
@@ -157,7 +256,7 @@ export function AdherenceCalendar({
 
               {/* Little Today Indicator Dot */}
               {isToday && (
-                <span className="absolute bottom-2.5 w-1.5 h-1.5 rounded-full bg-indigo-650"></span>
+                <span className="absolute bottom-2 w-1.5 h-1.5 rounded-full bg-indigo-650"></span>
               )}
             </button>
           );
