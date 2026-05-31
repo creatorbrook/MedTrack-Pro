@@ -1,0 +1,6 @@
+{
+  "name": "Medicine Tracker & Reminders",
+  "description": "A personal medication tracking and reminder application that tracks daily intake, updates status updates, sets reminder triggers, and maintains adherence visual metrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
